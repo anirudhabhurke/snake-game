@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Snake</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=VT323&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* --- Basic Setup & Dark Mode Theme --- */
+      body {
+        /* Improved Background: Added a radial gradient for depth */
+        background-color: #1a1a1a;
+        background-image: radial-gradient(
+            circle at center,
+            rgba(153, 255, 153, 0.05) 0%,
+            transparent 60%
+          ),
+          linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 100% 100%, 20px 20px;
+        color: #e0e0e0; /* Light gray text */
+        font-family: "VT323", monospace; /* Pixel-style font */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        flex-direction: column;
+        overflow: hidden; /* Prevents scrollbars */
+      }
+
+      /* --- New Main Wrapper for Responsiveness --- */
+      .main-wrapper {
+        width: 95%;
+        max-width: 440px; /* canvas width + padding */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transition: margin-bottom 0.3s ease; /* Smooth transition for layout shift */
+      }
+
+      /* --- Game Container --- */
+      .game-container {
+        width: 100%;
+        border-radius: 8px;
+        background-color: #000;
+        padding: 2.5%; /* Use percentage for padding */
+        /* Improved Shadow: Made the glow stronger and more layered */
+        box-shadow: 0 0 15px rgba(153, 255, 153, 0.4),
+          0 0 35px rgba(153, 255, 153, 0.2);
+      }
+
+      /* --- New Canvas Wrapper for Overlays --- */
+      .canvas-wrapper {
+        position: relative; /* New positioning context for overlays */
+      }
+
+      /* --- Game Canvas Styling --- */
+      #gameCanvas {
+        width: 100%; /* Canvas scales with container */
+        height: auto;
+        display: block;
+        background-color: #0c140c; /* Very dark green, like old screens */
+        border: 2px solid #4a752c; /* Green border */
+      }
+
+      /* --- Info Container Styling --- */
+      .info-container {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+        margin-top: 15px;
+        align-items: flex-start; /* Aligns children to the top */
+      }
+
+      .score-info {
+        font-size: clamp(18px, 4vw, 24px); /* Responsive font size */
+        color: #9f9;
+        text-shadow: 0 0 5px #0f0;
+      }
+
+      /* --- Level Container Styling --- */
+      .level-info {
+        display: flex;
+        flex-direction: column; /* Stacks items vertically */
+        align-items: flex-end; /* Aligns items to the right */
+        gap: 8px; /* Space between level text and progress bar */
+      }
+
+      #level-display {
+        font-size: clamp(18px, 4vw, 24px); /* Responsive font size */
+        color: #9f9;
+        /* The new glow effect */
+        text-shadow: 0 0 8px #9f9, 0 0 12px rgba(153, 255, 153, 0.5);
+      }
+
+      .progress-bar-outer {
+        width: 120px;
+        height: 12px;
+        background-color: #000;
+        border: 2px solid #4a752c;
+        border-radius: 4px;
+        padding: 1px;
+      }
+
+      #level-progress-bar {
+        height: 100%;
+        width: 0%; /* Starts at 0 */
+        background-color: #9f9;
+        border-radius: 2px;
+        transition: width 0.2s ease-in-out;
+      }
+
+      /* --- Message Styling (Welcome and Game Over) --- */
+      .message-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0; /* Fills the new wrapper */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        text-align: center;
+        pointer-events: none;
+        z-index: 10; /* Ensure messages are on top */
+      }
+
+      /* --- Dim Overlay Styling --- */
+      #dimOverlay {
+        position: absolute;
+        top: -2px;
+        left: -2px;
+        right: -2px;
+        bottom: -2px; /* Fills the wrapper AND covers the canvas border */
+        background-color: rgba(0, 0, 0, 0.7);
+        z-index: 5;
+      }
+
+      #welcomeMessage,
+      #gameOverMessage {
+        font-size: clamp(32px, 10vw, 50px); /* Responsive font size */
+      }
+
+      #welcomeMessage {
+        color: #9f9;
+        text-shadow: 0 0 10px #0f0;
+      }
+
+      #welcomeMessage span,
+      #gameOverMessage span {
+        font-size: clamp(16px, 4vw, 20px); /* Responsive font size */
+        margin-top: 10px;
+      }
+
+      #gameOverMessage {
+        color: #ff4444; /* Red game over text */
+        text-shadow: 0 0 10px #f00;
+        display: none; /* Hidden by default */
+      }
+
+      /* --- Arrow Button Controls --- */
+      .controls-container {
+        display: none; /* Hide by default */
+        position: fixed;
+        z-index: 15;
+        display: grid;
+        grid-template-areas:
+          ". up ."
+          "left down right";
+        gap: 15px; /* Increased gap */
+      }
+
+      .arrow-btn {
+        width: 60px; /* Increased size */
+        height: 60px; /* Increased size */
+        background-color: rgba(153, 255, 153, 0.2);
+        border: 2px solid #4a752c;
+        color: #9f9;
+        border-radius: 8px;
+        cursor: pointer;
+        user-select: none; /* Prevent text selection on double tap */
+        display: flex; /* Center SVG */
+        justify-content: center;
+        align-items: center;
+      }
+      .arrow-btn:active {
+        background-color: rgba(153, 255, 153, 0.5);
+      }
+
+      .arrow-btn svg {
+        width: 50%;
+        height: 50%;
+        fill: currentColor; /* Inherit color from parent */
+      }
+
+      #upBtn {
+        grid-area: up;
+      }
+      #leftBtn {
+        grid-area: left;
+      }
+      #downBtn {
+        grid-area: down;
+      }
+      #rightBtn {
+        grid-area: right;
+      }
+
+      /* Rotate the SVG icons */
+      #downBtn svg {
+        transform: rotate(180deg);
+      }
+      #leftBtn svg {
+        transform: rotate(-90deg);
+      }
+      #rightBtn svg {
+        transform: rotate(90deg);
+      }
+
+      /* --- Controls Info --- */
+      .controls-text {
+        margin-top: 20px;
+        font-size: 18px;
+        color: #888;
+      }
+
+      /* --- Responsive Logic for Controls --- */
+      /* Show controls and hide text on touch-primary devices */
+      @media (hover: none) and (pointer: coarse) {
+        .controls-container {
+          display: grid;
+        }
+        .controls-text {
+          display: none;
+        }
+      }
+
+      /* Default for touch devices: Bottom Right */
+      .controls-container {
+        bottom: 20px;
+        right: 20px;
+      }
+
+      /* Mobile Portrait: Height > Width */
+      @media (max-aspect-ratio: 1/1) {
+        .main-wrapper {
+          margin-bottom: 200px; /* Pushes the game area up on mobile */
+        }
+        .controls-container {
+          right: auto; /* Unset the right property */
+          left: 50%;
+          transform: translateX(-50%);
+          bottom: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="main-wrapper">
+      <div class="game-container">
+        <div class="canvas-wrapper">
+          <!-- Canvas where the game is rendered -->
+          <canvas id="gameCanvas" width="400" height="400"></canvas>
+
+          <!-- Dim background overlay -->
+          <div id="dimOverlay"></div>
+
+          <!-- Welcome message, visible by default -->
+          <div id="welcomeMessage" class="message-overlay">
+            SNAKE
+            <span>Tap or Use Arrow Keys to Start</span>
+          </div>
+
+          <!-- Game Over message, initially hidden -->
+          <div id="gameOverMessage" class="message-overlay">
+            GAME OVER
+            <span>Tap or Press Enter to Restart</span>
+          </div>
+        </div>
+
+        <!-- Info Container -->
+        <div class="info-container">
+          <div class="score-info">
+            <div id="score">SCORE: 0</div>
+            <div id="highScore">HIGH: 0</div>
+          </div>
+          <div class="level-info">
+            <div id="level-display">LEVEL 1</div>
+            <div class="progress-bar-outer">
+              <div id="level-progress-bar"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="controls-text">Use Arrow Keys to Move</div>
+    </div>
+
+    <!-- On-screen Arrow Buttons -->
+    <div class="controls-container">
+      <button id="upBtn" class="arrow-btn">
+        <svg viewBox="0 0 10 10"><polygon points="5,0 10,10 0,10" /></svg>
+      </button>
+      <button id="leftBtn" class="arrow-btn">
+        <svg viewBox="0 0 10 10"><polygon points="5,0 10,10 0,10" /></svg>
+      </button>
+      <button id="downBtn" class="arrow-btn">
+        <svg viewBox="0 0 10 10"><polygon points="5,0 10,10 0,10" /></svg>
+      </button>
+      <button id="rightBtn" class="arrow-btn">
+        <svg viewBox="0 0 10 10"><polygon points="5,0 10,10 0,10" /></svg>
+      </button>
+    </div>
+
+    <script>
+      // --- Game Setup ---
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+
+      const scoreEl = document.getElementById("score");
+      const highScoreEl = document.getElementById("highScore");
+      const gameOverMessageEl = document.getElementById("gameOverMessage");
+      const welcomeMessageEl = document.getElementById("welcomeMessage");
+      const dimOverlayEl = document.getElementById("dimOverlay");
+      const progressBar = document.getElementById("level-progress-bar");
+      const levelDisplayEl = document.getElementById("level-display");
+
+      // Button elements
+      const upBtn = document.getElementById("upBtn");
+      const downBtn = document.getElementById("downBtn");
+      const leftBtn = document.getElementById("leftBtn");
+      const rightBtn = document.getElementById("rightBtn");
+
+      const gridSize = 20; // Size of each square in the grid
+      const tileCount = 20; // Canvas is 20x20 tiles
+      const initialSpeed = 7; // The starting speed of the snake
+
+      // --- Game State Variables ---
+      let snake = [{ x: 10, y: 10 }];
+      let previousSnake = JSON.parse(JSON.stringify(snake));
+      let food = { x: 15, y: 15 };
+      let velocity = { x: 0, y: 0 };
+      let inputQueue = [];
+      let score = 0;
+      let gameSpeed = initialSpeed;
+      let isGameOver = false;
+      let lastLogicUpdateTime = 0;
+
+      let highScore = localStorage.getItem("snakeHighScore") || 0;
+
+      // --- Main Animation Loop ---
+      function animationLoop(currentTime) {
+        if (isGameOver) {
+          return;
+        }
+
+        requestAnimationFrame(animationLoop);
+
+        const logicInterval = 1000 / gameSpeed;
+
+        while (currentTime - lastLogicUpdateTime > logicInterval) {
+          updateGameLogic();
+          lastLogicUpdateTime += logicInterval;
+        }
+
+        const progress = (currentTime - lastLogicUpdateTime) / logicInterval;
+
+        drawSmooth(progress);
+      }
+
+      // --- Game Logic Update ---
+      function updateGameLogic() {
+        previousSnake = JSON.parse(JSON.stringify(snake));
+
+        while (inputQueue.length > 0) {
+          const nextDirection = inputQueue.shift();
+
+          if (
+            snake.length > 1 &&
+            nextDirection.x === -velocity.x &&
+            nextDirection.y === -velocity.y
+          ) {
+            continue;
+          }
+
+          velocity = nextDirection;
+          break;
+        }
+
+        if (velocity.x === 0 && velocity.y === 0) return;
+
+        const head = { x: snake[0].x + velocity.x, y: snake[0].y + velocity.y };
+
+        if (checkCollision(head)) {
+          endGame();
+          return;
+        }
+
+        snake.unshift(head);
+
+        if (head.x === food.x && head.y === food.y) {
+          score++;
+          updateLevelAndProgress(); // Update speed and progress bar
+          generateFood();
+        } else {
+          snake.pop();
+        }
+      }
+
+      function checkCollision(head) {
+        if (
+          head.x < 0 ||
+          head.x >= tileCount ||
+          head.y < 0 ||
+          head.y >= tileCount
+        ) {
+          return true;
+        }
+
+        for (let i = 1; i < snake.length; i++) {
+          if (head.x === snake[i].x && head.y === snake[i].y) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      function generateFood() {
+        food.x = Math.floor(Math.random() * tileCount);
+        food.y = Math.floor(Math.random() * tileCount);
+
+        for (let segment of snake) {
+          if (segment.x === food.x && segment.y === food.y) {
+            generateFood();
+          }
+        }
+      }
+
+      // --- Function for Leveling Up ---
+      function updateLevelAndProgress() {
+        // Calculate the level based on score (every 10 points)
+        const level = Math.floor(score / 10);
+
+        // Increase speed by 10% for each level
+        gameSpeed = initialSpeed * Math.pow(1.1, level);
+
+        // Update the progress bar
+        const progressPercentage = ((score % 10) / 10) * 100;
+        progressBar.style.width = progressPercentage + "%";
+
+        // Update the level display text
+        levelDisplayEl.textContent = "LEVEL " + (level + 1);
+      }
+
+      function endGame() {
+        isGameOver = true;
+        gameOverMessageEl.style.display = "flex";
+        dimOverlayEl.style.display = "block"; // Show overlay
+        if (score > highScore) {
+          highScore = score;
+          localStorage.setItem("snakeHighScore", highScore);
+        }
+      }
+
+      function restartGame() {
+        snake = [{ x: 10, y: 10 }];
+        previousSnake = JSON.parse(JSON.stringify(snake));
+        velocity = { x: 0, y: 0 };
+        inputQueue = [];
+        score = 0;
+        gameSpeed = initialSpeed; // Reset speed
+        progressBar.style.width = "0%"; // Reset progress bar
+        levelDisplayEl.textContent = "LEVEL 1"; // Reset level display
+        isGameOver = false;
+        gameOverMessageEl.style.display = "none";
+        handleGameStart(); // Hide overlays
+        lastLogicUpdateTime = performance.now();
+        generateFood();
+        requestAnimationFrame(animationLoop);
+      }
+
+      // --- Drawing Function with Interpolation ---
+      function drawSmooth(progress) {
+        progress = Math.min(progress, 1);
+
+        ctx.fillStyle = "#0c140c";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "#9f9";
+        snake.forEach((segment, index) => {
+          const prevSegment =
+            previousSnake[index] || previousSnake[previousSnake.length - 1];
+
+          const drawX =
+            (prevSegment.x + (segment.x - prevSegment.x) * progress) * gridSize;
+          const drawY =
+            (prevSegment.y + (segment.y - prevSegment.y) * progress) * gridSize;
+
+          ctx.fillRect(drawX, drawY, gridSize - 1, gridSize - 1);
+        });
+
+        ctx.fillStyle = "#ff4444";
+        ctx.fillRect(
+          food.x * gridSize,
+          food.y * gridSize,
+          gridSize - 1,
+          gridSize - 1
+        );
+
+        scoreEl.textContent = `SCORE: ${score}`;
+        highScoreEl.textContent = `HIGH: ${highScore}`;
+      }
+
+      // --- Central Input Handler ---
+      function handleInput(direction) {
+        if (welcomeMessageEl.style.display !== "none") {
+          handleGameStart();
+        }
+        inputQueue.push(direction);
+      }
+
+      function handleGameStart() {
+        welcomeMessageEl.style.display = "none";
+        dimOverlayEl.style.display = "none";
+      }
+
+      // --- Event Listeners ---
+      document.addEventListener("keydown", (e) => {
+        if (isGameOver && e.key === "Enter") {
+          restartGame();
+          return;
+        }
+
+        switch (e.key) {
+          case "ArrowUp":
+            handleInput({ x: 0, y: -1 });
+            break;
+          case "ArrowDown":
+            handleInput({ x: 0, y: 1 });
+            break;
+          case "ArrowLeft":
+            handleInput({ x: -1, y: 0 });
+            break;
+          case "ArrowRight":
+            handleInput({ x: 1, y: 0 });
+            break;
+        }
+      });
+
+      // Add tap/click listener for starting and restarting
+      document.addEventListener("click", (e) => {
+        // Don't do anything if a button was clicked
+        if (e.target.closest(".arrow-btn")) {
+          return;
+        }
+
+        if (isGameOver) {
+          restartGame();
+        } else if (welcomeMessageEl.style.display !== "none") {
+          handleGameStart();
+        }
+      });
+
+      upBtn.addEventListener("click", () => handleInput({ x: 0, y: -1 }));
+      downBtn.addEventListener("click", () => handleInput({ x: 0, y: 1 }));
+      leftBtn.addEventListener("click", () => handleInput({ x: -1, y: 0 }));
+      rightBtn.addEventListener("click", () => handleInput({ x: 1, y: 0 }));
+
+      // --- Initial Game Start ---
+      generateFood();
+      drawSmooth(1);
+      lastLogicUpdateTime = performance.now();
+      requestAnimationFrame(animationLoop);
+    </script>
+  </body>
+</html>
